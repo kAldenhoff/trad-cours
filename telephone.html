@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Micro — Traduction</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f0f0f;
+    color: #f0f0f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1.5rem;
+    gap: 1.5rem;
+  }
+  h1 { font-size: 1.1rem; font-weight: 500; color: #888; letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .channel-row {
+    display: flex; gap: 8px; width: 100%; max-width: 400px;
+  }
+  .channel-row input {
+    flex: 1;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #333;
+    background: #1a1a1a;
+    color: #f0f0f0;
+    font-size: 1rem;
+    font-family: 'Courier New', monospace;
+  }
+  .channel-row input:focus { outline: none; border-color: #4ade80; }
+
+  .lang-row {
+    display: flex; gap: 10px; width: 100%; max-width: 400px; align-items: center;
+  }
+  .lang-row select {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1.5px solid #333;
+    background: #1a1a1a;
+    color: #f0f0f0;
+    font-size: 0.95rem;
+  }
+  .lang-row select:focus { outline: none; border-color: #4ade80; }
+  .arrow { color: #555; font-size: 1.2rem; }
+
+  .btn-mic {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    border: 3px solid #333;
+    background: #1a1a1a;
+    color: #f0f0f0;
+    font-size: 3rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .btn-mic.active {
+    background: #052e16;
+    border-color: #4ade80;
+    box-shadow: 0 0 0 8px rgba(74,222,128,0.15);
+    animation: breathe 1.5s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 8px rgba(74,222,128,0.15); }
+    50% { box-shadow: 0 0 0 16px rgba(74,222,128,0.05); }
+  }
+
+  .status {
+    font-size: 0.85rem;
+    color: #555;
+    text-align: center;
+    min-height: 1.2em;
+  }
+  .status.ok { color: #4ade80; }
+  .status.err { color: #f87171; }
+
+  .text-box {
+    width: 100%; max-width: 400px;
+    background: #1a1a1a;
+    border: 1.5px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 1rem;
+    min-height: 80px;
+  }
+  .text-box .label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .text-box .content { font-size: 1rem; color: #ddd; line-height: 1.5; }
+  .text-box.translated .content { color: #4ade80; font-weight: 500; }
+
+  .hint {
+    font-size: 0.8rem; color: #444; text-align: center; max-width: 320px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎙 Micro Professeur</h1>
+
+<div class="channel-row">
+  <input type="text" id="channelInput" placeholder="ex: cours-dupont-42" value="" spellcheck="false" autocomplete="off" />
+</div>
+
+<div class="lang-row">
+  <select id="srcLang">
+    <option value="fr-FR">Français</option>
+    <option value="en-US">English (US)</option>
+    <option value="en-GB">English (GB)</option>
+    <option value="es-ES">Español</option>
+    <option value="de-DE">Deutsch</option>
+    <option value="ar-SA">العربية</option>
+    <option value="nl-NL">Nederlands</option>
+    <option value="it-IT">Italiano</option>
+    <option value="pt-PT">Português</option>
+    <option value="ru-RU">Русский</option>
+    <option value="zh-CN">中文</option>
+  </select>
+  <span class="arrow">→</span>
+  <select id="tgtLang">
+    <option value="en">Anglais</option>
+    <option value="fr">Français</option>
+    <option value="ar">Arabe</option>
+    <option value="nl">Néerlandais</option>
+    <option value="es">Espagnol</option>
+    <option value="de">Allemand</option>
+    <option value="it">Italien</option>
+    <option value="pt">Portugais</option>
+    <option value="ru">Russe</option>
+    <option value="zh">Chinois</option>
+    <option value="tr">Turc</option>
+    <option value="pl">Polonais</option>
+    <option value="uk">Ukrainien</option>
+    <option value="ro">Roumain</option>
+  </select>
+</div>
+
+<button class="btn-mic" id="btnMic" onclick="toggleMic()">🎙</button>
+<div class="status" id="status">Entrez un nom de canal puis appuyez sur le micro</div>
+
+<div class="text-box">
+  <div class="label">Ce que vous dites</div>
+  <div class="content" id="originalText">—</div>
+</div>
+
+<div class="text-box translated">
+  <div class="label">Traduction envoyée</div>
+  <div class="content" id="translatedText">—</div>
+</div>
+
+<div class="hint">Le canal doit être identique sur le téléphone et sur le PC. Choisissez un nom unique (ex: <em>cours-martin-2026</em>).</div>
+
+<script>
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+let sendTimeout = null;
+let lastSent = '';
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+async function translate(text, srcLang, tgtLang) {
+  const langCode = srcLang.split('-')[0];
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langCode}|${tgtLang}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.responseStatus === 200) return data.responseData.translatedText;
+  } catch(e) {}
+  return text;
+}
+
+async function sendToPC(original, translated) {
+  const channel = document.getElementById('channelInput').value.trim();
+  if (!channel) return;
+  const payload = JSON.stringify({ original, translated });
+  try {
+    await fetch(`https://ntfy.sh/${channel}`, {
+      method: 'POST',
+      body: payload,
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  } catch(e) {
+    setStatus('Erreur réseau ntfy.sh', 'err');
+  }
+}
+
+function toggleMic() {
+  const channel = document.getElementById('channelInput').value.trim();
+  if (!channel) {
+    setStatus('Entrez un nom de canal d\'abord !', 'err');
+    return;
+  }
+  if (!SpeechRec) {
+    setStatus('Reconnaissance vocale non supportée. Utilisez Chrome.', 'err');
+    return;
+  }
+  if (isListening) stopMic();
+  else startMic();
+}
+
+function startMic() {
+  const srcLang = document.getElementById('srcLang').value;
+  recognition = new SpeechRec();
+  recognition.lang = srcLang;
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    isListening = true;
+    document.getElementById('btnMic').classList.add('active');
+    setStatus('Écoute en cours…', 'ok');
+  };
+
+  recognition.onresult = (event) => {
+    let interim = '', final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    const text = final || interim;
+    if (!text) return;
+    document.getElementById('originalText').textContent = text;
+
+    clearTimeout(sendTimeout);
+    sendTimeout = setTimeout(async () => {
+      if (text === lastSent) return;
+      lastSent = text;
+      const tgtLang = document.getElementById('tgtLang').value;
+      const srcLang = document.getElementById('srcLang').value;
+      setStatus('Traduction…', '');
+      const translated = await translate(text, srcLang, tgtLang);
+      document.getElementById('translatedText').textContent = translated;
+      await sendToPC(text, translated);
+      setStatus('Envoyé au PC ✓', 'ok');
+    }, 700);
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') return;
+    setStatus('Erreur : ' + e.error, 'err');
+  };
+
+  recognition.onend = () => {
+    if (isListening) recognition.start();
+  };
+
+  recognition.start();
+}
+
+function stopMic() {
+  isListening = false;
+  if (recognition) recognition.stop();
+  document.getElementById('btnMic').classList.remove('active');
+  setStatus('Arrêté', '');
+}
+
+// Générer un canal par défaut aléatoire
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('ntfy-channel');
+  if (saved) {
+    document.getElementById('channelInput').value = saved;
+  } else {
+    const rand = 'cours-' + Math.random().toString(36).slice(2, 8);
+    document.getElementById('channelInput').value = rand;
+  }
+  document.getElementById('channelInput').addEventListener('input', (e) => {
+    localStorage.setItem('ntfy-channel', e.target.value.trim());
+  });
+});
+</script>
+</body>
+</html>
