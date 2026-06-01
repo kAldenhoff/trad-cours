@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Traduction — Affichage</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: rgba(0, 0, 0, 0.82);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Barre de contrôle en haut — discrète */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(0,0,0,0.6);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-wrap: wrap;
+  }
+  #toolbar label { font-size: 12px; color: #666; white-space: nowrap; }
+  #channelInput {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #111;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    width: 180px;
+  }
+  #channelInput:focus { outline: none; border-color: #4ade80; }
+
+  .ctrl-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #111;
+    color: #ccc;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .ctrl-btn:hover { background: #222; }
+  .ctrl-btn.connected { border-color: #4ade80; color: #4ade80; }
+  .ctrl-btn.disconnected { border-color: #f87171; color: #f87171; }
+
+  #statusDot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #333;
+    flex-shrink: 0;
+  }
+  #statusDot.on { background: #4ade80; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  #statusText { font-size: 12px; color: #555; }
+
+  .size-btns { display: flex; gap: 4px; margin-left: auto; }
+  .size-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #111;
+    color: #aaa;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .size-btn:hover { background: #222; }
+
+  /* Zone principale d'affichage */
+  #display {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 2rem;
+    gap: 1rem;
+  }
+
+  #originalText {
+    font-size: 18px;
+    color: rgba(255,255,255,0.4);
+    font-style: italic;
+    line-height: 1.4;
+    min-height: 1.4em;
+    transition: opacity 0.3s;
+  }
+
+  #translatedText {
+    font-size: 48px;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.3;
+    min-height: 1.3em;
+    transition: all 0.3s ease;
+    word-wrap: break-word;
+  }
+
+  /* Fond semi-transparent derrière le texte traduit */
+  .text-bg {
+    background: rgba(0,0,0,0.5);
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    display: inline-block;
+  }
+
+  #placeholder {
+    font-size: 22px;
+    color: rgba(255,255,255,0.15);
+    text-align: center;
+    margin: auto;
+  }
+
+  /* Mode transparent (pour overlay par-dessus les slides) */
+  body.transparent-mode {
+    background: transparent !important;
+  }
+  body.transparent-mode #toolbar {
+    background: rgba(0,0,0,0.85);
+    border-radius: 8px;
+    margin: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  body.transparent-mode #display {
+    background: transparent;
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <label>Canal :</label>
+  <input type="text" id="channelInput" placeholder="cours-dupont-42" spellcheck="false" autocomplete="off" />
+  <button class="ctrl-btn disconnected" id="btnConnect" onclick="toggleConnect()">Se connecter</button>
+  <div id="statusDot"></div>
+  <span id="statusText">Non connecté</span>
+  <div class="size-btns">
+    <button class="size-btn" onclick="changeSize(-4)">A−</button>
+    <button class="size-btn" onclick="changeSize(4)">A+</button>
+    <button class="size-btn" onclick="toggleBg()" title="Fond transparent">⬜</button>
+    <button class="size-btn" onclick="clearText()">✕</button>
+  </div>
+</div>
+
+<div id="display">
+  <div id="placeholder">En attente de la traduction…</div>
+  <div id="originalText" style="display:none"></div>
+  <div id="translatedText" style="display:none"><div class="text-bg" id="translatedInner"></div></div>
+</div>
+
+<script>
+let eventSource = null;
+let isConnected = false;
+let fontSize = 48;
+let bgOn = true;
+
+function setStatus(msg, state) {
+  document.getElementById('statusText').textContent = msg;
+  const dot = document.getElementById('statusDot');
+  dot.className = state === 'on' ? 'on' : '';
+  const btn = document.getElementById('btnConnect');
+  btn.className = 'ctrl-btn ' + (state === 'on' ? 'connected' : 'disconnected');
+  btn.textContent = state === 'on' ? 'Déconnecter' : 'Se connecter';
+}
+
+function changeSize(delta) {
+  fontSize = Math.max(16, Math.min(96, fontSize + delta));
+  document.getElementById('translatedText').style.fontSize = fontSize + 'px';
+}
+
+function toggleBg() {
+  bgOn = !bgOn;
+  document.body.style.background = bgOn ? 'rgba(0,0,0,0.82)' : 'transparent';
+}
+
+function clearText() {
+  document.getElementById('placeholder').style.display = '';
+  document.getElementById('originalText').style.display = 'none';
+  document.getElementById('translatedText').style.display = 'none';
+}
+
+function showTranslation(original, translated) {
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('originalText').style.display = '';
+  document.getElementById('originalText').textContent = original;
+  document.getElementById('translatedText').style.display = '';
+  document.getElementById('translatedInner').textContent = translated;
+}
+
+function toggleConnect() {
+  if (isConnected) disconnect();
+  else connect();
+}
+
+function connect() {
+  const channel = document.getElementById('channelInput').value.trim();
+  if (!channel) {
+    setStatus('Entrez un canal !', 'off');
+    return;
+  }
+  localStorage.setItem('ntfy-channel', channel);
+
+  if (eventSource) eventSource.close();
+
+  setStatus('Connexion…', 'off');
+
+  eventSource = new EventSource(`https://ntfy.sh/${channel}/sse`);
+
+  eventSource.onopen = () => {
+    isConnected = true;
+    setStatus('Connecté — en attente…', 'on');
+  };
+
+  eventSource.onmessage = (event) => {
+    try {
+      const raw = JSON.parse(event.data);
+      // ntfy encapsule le message dans raw.message
+      const payload = JSON.parse(raw.message || event.data);
+      if (payload.original !== undefined && payload.translated !== undefined) {
+        showTranslation(payload.original, payload.translated);
+        setStatus('Reçu ✓', 'on');
+      }
+    } catch(e) {
+      // Message ntfy de connexion, on ignore
+    }
+  };
+
+  eventSource.onerror = () => {
+    isConnected = false;
+    setStatus('Erreur — reconnexion…', 'off');
+    // EventSource se reconnecte automatiquement
+  };
+}
+
+function disconnect() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  isConnected = false;
+  setStatus('Déconnecté', 'off');
+}
+
+// Charger le canal sauvegardé
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('ntfy-channel');
+  if (saved) document.getElementById('channelInput').value = saved;
+
+  // Mettre à jour le canal sauvegardé à la frappe
+  document.getElementById('channelInput').addEventListener('input', (e) => {
+    localStorage.setItem('ntfy-channel', e.target.value.trim());
+  });
+
+  // Raccourcis clavier
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '+' || e.key === '=') changeSize(4);
+    if (e.key === '-') changeSize(-4);
+    if (e.key === 'Escape') clearText();
+  });
+});
+</script>
+</body>
+</html>
